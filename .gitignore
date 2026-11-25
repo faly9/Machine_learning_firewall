@@ -1,0 +1,94 @@
+
+# ==========================================
+# PYTHON
+# ==========================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# ==========================================
+# ENVIRONNEMENT VIRTUEL
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+
+# ==========================================
+# IDE / EDITEURS
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# VARIABLES D'ENVIRONNEMENT / SECRETS
+# ==========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials/
+
+# ==========================================
+# BASES DE DONNEES SQLITE
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# ==========================================
+# LOGS
+# ==========================================
+*.log
+logs/
+log/
+
+# ==========================================
+# MACHINE LEARNING - MODELES
+# ==========================================
+# Décommenter si tu ne souhaites pas publier le modèle
+# models/*.joblib
+# models/*.pkl
+# models/*.model
+
+# ==========================================
+# DATASETS - NE PAS PUBLIER SUR GITHUB
+# ==========================================
+datasets/
+dataset/
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.pcap
+*.pcapng
+
+# ==========================================
+# SAUVEGARDES
+# ==========================================
+backup/
+backups/
+*.bak
+*.old
+
+# ==========================================
+# SYSTEME
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+models/*.joblib
