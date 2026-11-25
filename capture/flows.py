@@ -44,6 +44,13 @@ FEATURES = [
 
 class WindowAggregator:
 
+    # --------------------------------------------------------
+    # CORRECTIF FAUX POSITIFS : ports UDP du trafic normal
+    # (DNS, NTP, QUIC/HTTP3, mDNS) exclus du comptage flood.
+    # --------------------------------------------------------
+
+    IGNORED_UDP_PORTS = {53, 123, 443, 5353}
+
     def __init__(self, window_seconds=10, min_packets=3):
 
         self.window_seconds = window_seconds
@@ -307,6 +314,38 @@ class WindowAggregator:
         )
 
     # ========================================================
+    # FILTRE ANTI FAUX POSITIFS (DOS / SYN FLOOD / DDOS)
+    # ========================================================
+    # Seuls les paquets qui OUVRENT une communication sont comptes :
+    #   - TCP  : SYN pur (pas SYN-ACK, pas ACK, pas donnees, pas FIN)
+    #   - UDP  : hors DNS / NTP / QUIC / mDNS
+    #   - ICMP : tout paquet
+    # Une page web normale genere beaucoup d'ACK et de donnees
+    # mais tres peu de nouveaux SYN.
+
+    def _counts_for_flood(
+        self,
+        protocol,
+        is_syn,
+        src_port,
+        dst_port
+    ):
+
+        if protocol == 6:
+            return is_syn
+
+        if protocol == 17:
+            return (
+                src_port not in self.IGNORED_UDP_PORTS
+                and dst_port not in self.IGNORED_UDP_PORTS
+            )
+
+        if protocol == 1:
+            return True
+
+        return False
+
+    # ========================================================
     # DETECTION DOS / DDOS / SYN FLOOD
     # ========================================================
 
@@ -314,11 +353,21 @@ class WindowAggregator:
         self,
         src_ip,
         dst_ip,
+        src_port,
         dst_port,
         protocol,
         is_syn,
         timestamp
     ):
+
+        # CORRECTIF : ignorer les paquets de sessions deja etablies
+        if not self._counts_for_flood(
+            protocol,
+            is_syn,
+            src_port,
+            dst_port
+        ):
+            return
 
         window = self.behavior_window_seconds
 
@@ -350,17 +399,15 @@ class WindowAggregator:
 
         if len(source_events) >= self.dos_threshold:
 
-            # CORRECTION : un depassement net de seuil volumetrique
-            # est une preuve suffisante -> MALICIOUS (et non SUSPECT),
-            # sinon le score de risque peut ne jamais declencher
-            # le blocage automatique pendant un test DoS.
+            # Un depassement net de seuil volumetrique
+            # est une preuve suffisante -> MALICIOUS.
             self._emit_behavior(
                 "DOS_BEHAVIOR",
                 src_ip,
                 dst_ip,
                 (
-                    f"{len(source_events)} paquets envoyés "
-                    f"en {window} secondes"
+                    f"{len(source_events)} paquets d'ouverture "
+                    f"de connexion en {window} secondes"
                 ),
                 timestamp,
                 decision="MALICIOUS",
@@ -378,8 +425,6 @@ class WindowAggregator:
 
         if len(source_syn_events) >= self.syn_flood_threshold:
 
-            # CORRECTION : idem, le SYN flood est une detection
-            # deterministe -> MALICIOUS directement.
             self._emit_behavior(
                 "SYN_FLOOD_BEHAVIOR",
                 src_ip,
@@ -406,17 +451,15 @@ class WindowAggregator:
             and len(unique_sources) >= self.ddos_min_sources
         ):
 
-            # Reste "MALICIOUS" mais non bloquable individuellement
-            # (blockable=False) car la source est "MULTIPLE" :
-            # a traiter via une regle de blocage collective/CIDR
-            # cote firewall, pas via decision.engine.
+            # "MALICIOUS" mais non bloquable individuellement
+            # (blockable=False) car la source est "MULTIPLE".
             self._emit_behavior(
                 "DDOS_BEHAVIOR",
                 "MULTIPLE",
                 dst_ip,
                 (
-                    f"{len(events)} paquets provenant de "
-                    f"{len(unique_sources)} sources "
+                    f"{len(events)} paquets d'ouverture de connexion "
+                    f"provenant de {len(unique_sources)} sources "
                     f"en {window} secondes"
                 ),
                 timestamp,
@@ -434,6 +477,7 @@ class WindowAggregator:
         self,
         src_ip,
         dst_ip,
+        src_port,
         dst_port,
         protocol,
         is_syn,
@@ -443,6 +487,7 @@ class WindowAggregator:
         self._observe_traffic(
             src_ip,
             dst_ip,
+            src_port,
             dst_port,
             protocol,
             is_syn,
@@ -566,6 +611,7 @@ class WindowAggregator:
             self._observe_behavior(
                 ip.src,
                 ip.dst,
+                src_port,
                 dst_port,
                 protocol,
                 is_syn,
@@ -586,6 +632,7 @@ class WindowAggregator:
             self._observe_behavior(
                 ip.src,
                 ip.dst,
+                src_port,
                 dst_port,
                 protocol,
                 False,
@@ -606,6 +653,7 @@ class WindowAggregator:
             self._observe_behavior(
                 ip.src,
                 ip.dst,
+                src_port,
                 dst_port,
                 protocol,
                 False,
